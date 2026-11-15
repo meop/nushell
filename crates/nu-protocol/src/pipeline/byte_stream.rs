@@ -715,12 +715,29 @@ impl ByteStream {
     }
 
     /// Print all bytes of the [`ByteStream`] to stdout or stderr.
-    pub fn print(self, to_stderr: bool) -> Result<(), ShellError> {
+    ///
+    /// String streams get a trailing newline unless `no_newline`, to match
+    /// how `PipelineData::write_all_and_flush` prints collected values.
+    /// Binary and unknown-type streams are written as-is.
+    pub fn print(self, no_newline: bool, to_stderr: bool) -> Result<(), ShellError> {
+        let add_line_ending = !no_newline && self.type_() == ByteStreamType::String;
+        let span = self.span;
         if to_stderr {
-            self.write_to(&mut io::stderr())
+            self.write_to(&mut io::stderr())?;
+            if add_line_ending {
+                io::stderr()
+                    .write_all(b"\n")
+                    .map_err(|err| IoError::new(err, span, None))?;
+            }
         } else {
-            self.write_to(&mut io::stdout())
+            self.write_to(&mut io::stdout())?;
+            if add_line_ending {
+                io::stdout()
+                    .write_all(b"\n")
+                    .map_err(|err| IoError::new(err, span, None))?;
+            }
         }
+        Ok(())
     }
 
     /// Write all bytes of the [`ByteStream`] to `dest`.

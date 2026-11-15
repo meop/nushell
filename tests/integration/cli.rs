@@ -2282,3 +2282,67 @@ fn mixed_long_and_short_flags_work() -> TestResult {
     assert_eq!(stdout.trim(), "ok");
     Ok(())
 }
+
+#[test]
+fn print_adds_line_ending_to_string_stream() -> TestResult {
+    let mut cmd = Command::new(cargo_bin!());
+    let output = cmd
+        .args([
+            "--no-std-lib",
+            "-c",
+            "[hello world] | where {true} | str join ' ' | print",
+        ])
+        .output()?;
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert_eq!(stdout, "hello world\n");
+
+    Ok(())
+}
+
+#[test]
+fn print_no_newline_skips_line_ending_on_string_stream() -> TestResult {
+    let mut cmd = Command::new(cargo_bin!());
+    let output = cmd
+        .args([
+            "--no-std-lib",
+            "-c",
+            "[hello world] | where {true} | str join ' ' | print --no-newline",
+        ])
+        .output()?;
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert_eq!(stdout, "hello world");
+
+    Ok(())
+}
+
+#[test]
+fn print_raw_adds_line_ending_to_string_stream() -> TestResult {
+    let mut cmd = Command::new(cargo_bin!());
+    let output = cmd
+        .args([
+            "--no-std-lib",
+            "-c",
+            "[hello world] | where {true} | str join ' ' | print --raw",
+        ])
+        .output()?;
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert_eq!(stdout, "hello world\n");
+
+    Ok(())
+}
+
+#[test]
+fn print_binary_stream_has_no_line_ending() -> TestResult {
+    let mut cmd = Command::new(cargo_bin!());
+    let output = cmd
+        .args(["--no-std-lib", "-c", "0x[4142] | print --raw"])
+        .output()?;
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert_eq!(stdout, "\u{41}\u{42}");
+
+    Ok(())
+}

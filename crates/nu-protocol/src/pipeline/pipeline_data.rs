@@ -736,7 +736,7 @@ impl PipelineData {
         match self {
             // Print byte streams directly as long as they aren't binary.
             PipelineData::ByteStream(stream, ..) if stream.type_() != ByteStreamType::Binary => {
-                stream.print(to_stderr)
+                stream.print(no_newline, to_stderr)
             }
             _ => {
                 // If the table function is in the declarations, then we can use it
@@ -804,7 +804,7 @@ impl PipelineData {
         let span = self.span();
         if let PipelineData::ByteStream(stream, ..) = self {
             // Copy ByteStreams directly
-            stream.print(to_stderr)
+            stream.print(no_newline, to_stderr)
         } else {
             let config = engine_state.get_config();
             for item in self {
