@@ -94,6 +94,19 @@ pub(crate) fn run_commands(
         }
 
         perf!("read login.nu", start_time, use_color);
+
+        // Autoload dirs are part of startup configuration: load them whenever
+        // startup config files are loaded here, matching `setup_config`, which
+        // always loads them for the interactive paths. A bare non-login
+        // `nu -c` still skips them, like it skips config.nu.
+        let start_time = Instant::now();
+        if parsed_nu_cli_args.login_shell.is_some()
+            || engine_state.config_dirs.config_file.is_override()
+        {
+            config_files::read_vendor_autoload_files(engine_state, &mut stack);
+        }
+
+        perf!("read autoloads", start_time, use_color);
     }
 
     // Startup ends when the commands start running.

@@ -2282,3 +2282,70 @@ fn mixed_long_and_short_flags_work() -> TestResult {
     assert_eq!(stdout.trim(), "ok");
     Ok(())
 }
+
+fn autoload_test_home() -> std::path::PathBuf {
+    let unique = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|duration| duration.as_nanos())
+        .unwrap_or(0);
+    let home = std::env::temp_dir().join(format!(
+        "nu_autoload_test_{}_{}",
+        std::process::id(),
+        unique
+    ));
+    let autoload_dir = home.join("nushell").join("autoload");
+    std::fs::create_dir_all(&autoload_dir).expect("failed to create autoload dir");
+    std::fs::write(
+        autoload_dir.join("zz_test_env.nu"),
+        "$env.NU_AUTOLOAD_TEST = 42",
+    )
+    .expect("failed to write autoload file");
+    home
+}
+
+fn set_config_home(cmd: &mut Command, home: &std::path::Path) {
+    // XDG_CONFIG_HOME is honored on every platform (resolve_config_home checks
+    // it before the platform default), while the dirs crate on Windows derives
+    // the platform default from the shell API and ignores APPDATA overrides.
+    cmd.env("XDG_CONFIG_HOME", home);
+}
+
+#[test]
+fn login_flag_sources_autoload_dirs() -> TestResult {
+    let home = autoload_test_home();
+
+    let mut cmd = Command::new(cargo_bin!());
+    set_config_home(&mut cmd, &home);
+    let output = cmd
+        .args(["--no-std-lib", "-l", "-c", "$env.NU_AUTOLOAD_TEST"])
+        .output()?;
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        stdout.contains("42"),
+        "login -c must source autoload dirs, stdout: {stdout}"
+    );
+
+    std::fs::remove_dir_all(&home).ok();
+    Ok(())
+}
+
+#[test]
+fn non_login_commands_skip_autoload_dirs() -> TestResult {
+    let home = autoload_test_home();
+
+    let mut cmd = Command::new(cargo_bin!());
+    set_config_home(&mut cmd, &home);
+    let output = cmd
+        .args(["--no-std-lib", "-c", "$env.NU_AUTOLOAD_TEST | default 0"])
+        .output()?;
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        !stdout.contains("42"),
+        "non-login -c must not source autoload dirs, stdout: {stdout}"
+    );
+
+    std::fs::remove_dir_all(&home).ok();
+    Ok(())
+}
