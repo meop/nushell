@@ -1,0 +1,56 @@
+name: Fork Test
+
+# Fork-only workflow. Upstream's ci.yml runs on PRs and pushes to main with
+# self-hosted runners; this runs the targeted tests for the fix branches on
+# GitHub-hosted runners. Not meant for upstream.
+
+on:
+  push:
+    branches:
+      - 'test/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  NU_TEST_SKIP_DEPS_BUILD: true
+  NUSHELL_CARGO_PROFILE: ci
+
+concurrency:
+  group: fork-test-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout Repo
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Setup Rust Toolchain
+        run: cargo --version
+
+      - name: Cache Rust
+        uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          cache-all-crates: true
+          cache-workspace-crates: false
+
+      - name: Check Formatting
+        run: cargo fmt --all --check
+
+      - name: Run nu CLI tests
+        run: >-
+          cargo test -p nu --test tests
+          login_flag_sources_autoload
+          non_login_commands_skip_autoload
+          print_
+
+      - name: Run which tests
+        run: cargo test -p nu-command --test tests which
