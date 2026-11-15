@@ -14,7 +14,9 @@ permissions:
   contents: read
 
 env:
-  NU_TEST_SKIP_DEPS_BUILD: true
+  # No NU_TEST_SKIP_DEPS_BUILD here: upstream CI prebuilds the testbin deps,
+  # this workflow does not, and without them tests shelling out to `fail` or
+  # `nonu` see the binary missing and fail with a spurious exit code.
   NUSHELL_CARGO_PROFILE: ci
 
 concurrency:
