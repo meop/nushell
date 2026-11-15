@@ -47,7 +47,7 @@ jobs:
 
       - name: Run nu CLI tests
         run: >-
-          cargo test -p nu --test tests
+          cargo test -p nu --test tests --
           login_flag_sources_autoload
           non_login_commands_skip_autoload
           print_
