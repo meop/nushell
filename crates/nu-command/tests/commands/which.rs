@@ -236,3 +236,30 @@ fn which_respects_hidden_pathext() -> Result {
         Ok(())
     })
 }
+
+#[test]
+fn which_finds_inner_alias_in_def() -> Result {
+    // The inner alias shadows the outer one inside the block; `which` must
+    // resolve it through the stack bindings, like `scope aliases` does.
+    test()
+        .run(
+            r#"
+            alias xaz = echo alias1
+            def helper [] { alias xaz = echo alias2; which -a xaz | get definition.0 }
+            helper | str trim
+        "#,
+        )
+        .expect_value_eq("echo alias2")
+}
+
+#[test]
+fn which_finds_inner_alias_in_do_block() -> Result {
+    test()
+        .run(
+            r#"
+            alias xaz = echo alias1
+            do { alias xaz = echo alias2; which xaz | get definition.0 } | str trim
+        "#,
+        )
+        .expect_value_eq("echo alias2")
+}

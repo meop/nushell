@@ -1,4 +1,4 @@
-use nu_engine::{command_prelude::*, env};
+use nu_engine::{command_prelude::*, env, scope::ScopeData};
 use nu_protocol::PipelineMetadata;
 use nu_protocol::engine::CommandType;
 use std::collections::HashSet;
@@ -138,8 +138,18 @@ fn entry(
     Value::record(record, span)
 }
 
-fn get_entry_in_commands(engine_state: &EngineState, name: &str, span: Span) -> Option<Value> {
-    let decl_id = engine_state.find_decl(name.as_bytes(), &[])?;
+fn get_entry_in_commands(
+    engine_state: &EngineState,
+    stack: &Stack,
+    name: &str,
+    span: Span,
+) -> Option<Value> {
+    // Resolve the name as seen from the running block, like `scope aliases`
+    // does: aliases and custom commands defined at runtime inside a `def` or
+    // `do` block shadow engine-level declarations, and `engine_state.find_decl`
+    // would only see the latter.
+    let scope_data = ScopeData::new(engine_state, stack);
+    let decl_id = scope_data.find_decl(name.as_bytes(), span)?;
     let decl = engine_state.get_decl(decl_id);
     let definition = if decl.command_type() == CommandType::Alias {
         decl.as_alias().map(|alias| {
@@ -383,6 +393,7 @@ fn which_single(
     application: Spanned<String>,
     all: bool,
     engine_state: &EngineState,
+    stack: &Stack,
     cwd: impl AsRef<Path>,
     paths: impl AsRef<OsStr>,
     path_ext: &Option<OsString>,
@@ -401,7 +412,9 @@ fn which_single(
         (true, true) => get_all_entries_in_path(&prog_name, application.span, cwd, paths, path_ext),
         (true, false) => {
             let mut output: Vec<Value> = vec![];
-            if let Some(entry) = get_entry_in_commands(engine_state, &prog_name, application.span) {
+            if let Some(entry) =
+                get_entry_in_commands(engine_state, stack, &prog_name, application.span)
+            {
                 output.push(entry);
             }
             output.extend(get_all_entries_in_path(
@@ -418,10 +431,14 @@ fn which_single(
                 .into_iter()
                 .collect()
         }
-        (false, false) => get_entry_in_commands(engine_state, &prog_name, application.span)
-            .or_else(|| get_first_entry_in_path(&prog_name, application.span, cwd, paths, path_ext))
-            .into_iter()
-            .collect(),
+        (false, false) => {
+            { get_entry_in_commands(engine_state, stack, &prog_name, application.span) }
+                .or_else(|| {
+                    get_first_entry_in_path(&prog_name, application.span, cwd, paths, path_ext)
+                })
+                .into_iter()
+                .collect()
+        }
     }
 }
 
@@ -461,7 +478,15 @@ fn which(
     }
 
     for app in which_args.applications {
-        let values = which_single(app, which_args.all, engine_state, &cwd, &paths, &path_ext);
+        let values = which_single(
+            app,
+            which_args.all,
+            engine_state,
+            stack,
+            &cwd,
+            &paths,
+            &path_ext,
+        );
         output.extend(values);
     }
 
